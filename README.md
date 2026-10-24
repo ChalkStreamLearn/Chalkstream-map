@@ -29,6 +29,8 @@ Browser တွင် ပုံမှန်အားဖြင့် `http://local
 
 Output CRS သည် EPSG:4326 (WGS 84) ဖြစ်သည်။ Esri imagery သုံးရာတွင် map attribution ကို မဖျက်ပါနှင့်။
 
+Repository ထဲတွင် personal information၊ user-uploaded polygon data သို့မဟုတ် specific location defaults မပါပါ။ Center နှင့် image bounds များကို generic default ဖြင့်ထားပြီး အသုံးပြုသူက ကိုယ်တိုင်ဖြည့်ရသည်။
+
 Map Layer Control မှ `Satellite imagery` နှင့် `Vector map — OpenStreetMap` ကို ပြောင်းကြည့်နိုင်သည်။ Polygon များကို app folder အတွင်း `shared_polygons.json` တွင် သိမ်းထားပြီး browser tab များသည် ၃ စက္ကန့်တစ်ကြိမ် shared state ကို ပြန်ဖတ်သောကြောင့် tab တစ်ခုတွင် ဆွဲထားသော polygon ကို အခြား tab များတွင်လည်း အလိုအလျောက်မြင်ရသည်။
 
 ## Offline mode

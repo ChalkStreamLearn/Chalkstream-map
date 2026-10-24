@@ -122,17 +122,17 @@ st.session_state.features = merge_features(st.session_state.features, load_share
 
 with st.sidebar:
     st.header("မြေပုံတည်နေရာ")
-    center_lat = st.number_input("Center latitude", value=24.1029, format="%.6f")
-    center_lon = st.number_input("Center longitude", value=98.3107, format="%.6f")
-    zoom_level = st.slider("Zoom", min_value=12, max_value=23, value=20)
+    center_lat = st.number_input("Center latitude", value=0.0, format="%.6f")
+    center_lon = st.number_input("Center longitude", value=0.0, format="%.6f")
+    zoom_level = st.slider("Zoom", min_value=2, max_value=23, value=2)
     offline_mode = st.checkbox("Offline mode", value=False, key="offline_mode_v2", help="ဖွင့်ထားလျှင် online Esri/OSM tile မခေါ်ဘဲ local upload layer များကိုသာသုံးသည်။")
     st.caption("Offline အတွက် local layer ထည့်ရန်")
     satellite_upload = st.file_uploader("Satellite image (PNG/JPG)", type=["png", "jpg", "jpeg"], key="offline_satellite_upload")
     with st.expander("Satellite image bounds", expanded=False):
-        image_west = st.number_input("West / xmin", value=98.264122, format="%.6f")
-        image_south = st.number_input("South / ymin", value=23.999217, format="%.6f")
-        image_east = st.number_input("East / xmax", value=98.337593, format="%.6f")
-        image_north = st.number_input("North / ymax", value=24.121300, format="%.6f")
+        image_west = st.number_input("West / xmin", value=-180.0, format="%.6f")
+        image_south = st.number_input("South / ymin", value=-90.0, format="%.6f")
+        image_east = st.number_input("East / xmax", value=180.0, format="%.6f")
+        image_north = st.number_input("North / ymax", value=90.0, format="%.6f")
     vector_upload = st.file_uploader(
         "Local vector data (GeoJSON/GPKG/Shapefile ZIP)",
         type=["geojson", "json", "gpkg", "zip"],
