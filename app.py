@@ -125,7 +125,7 @@ with st.sidebar:
     center_lat = st.number_input("Center latitude", value=24.1029, format="%.6f")
     center_lon = st.number_input("Center longitude", value=98.3107, format="%.6f")
     zoom_level = st.slider("Zoom", min_value=12, max_value=23, value=20)
-    offline_mode = st.checkbox("Offline mode", value=True, help="ဖွင့်ထားလျှင် online Esri/OSM tile မခေါ်ဘဲ local upload layer များကိုသာသုံးသည်။")
+    offline_mode = st.checkbox("Offline mode", value=False, key="offline_mode_v2", help="ဖွင့်ထားလျှင် online Esri/OSM tile မခေါ်ဘဲ local upload layer များကိုသာသုံးသည်။")
     st.caption("Offline အတွက် local layer ထည့်ရန်")
     satellite_upload = st.file_uploader("Satellite image (PNG/JPG)", type=["png", "jpg", "jpeg"], key="offline_satellite_upload")
     with st.expander("Satellite image bounds", expanded=False):
@@ -168,6 +168,8 @@ with st.sidebar:
 map_obj = folium.Map(location=[center_lat, center_lon], zoom_start=zoom_level, tiles=None, control_scale=True)
 local_satellite = st.session_state.get("local_satellite")
 local_vector = st.session_state.get("local_vector")
+if offline_mode and not local_satellite and not local_vector:
+    st.warning("Offline mode ဖွင့်ထားသော်လည်း local satellite/vector layer မရှိသေးပါ။ နောက်ခံမြေပုံပေါ်ရန် Offline mode ကို ပိတ်ပါ သို့မဟုတ် local layer upload လုပ်ပါ။")
 if local_satellite:
     folium.raster_layers.ImageOverlay(
         image=local_satellite["image"],
