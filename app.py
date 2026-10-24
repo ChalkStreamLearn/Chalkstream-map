@@ -270,7 +270,7 @@ with map_col:
     st.caption("Map toolbar မှ polygon/rectangle ဆွဲပါ။ ဆွဲပြီးသားအကွက်ကို တိုက်ရိုက်နှိပ်၍ Plot/Yard number ဖြည့်နိုင်ပါသည်။")
     map_result = st_folium(
         map_obj,
-        height=700,
+        height=560,
         use_container_width=True,
         returned_objects=["all_drawings", "center", "zoom", "last_object_clicked", "last_object_clicked_count"],
         key="plot_map",
