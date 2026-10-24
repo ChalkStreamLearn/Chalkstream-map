@@ -12,6 +12,7 @@ import folium
 import geopandas as gpd
 import pandas as pd
 import streamlit as st
+from shapely.geometry import Point, shape
 from folium.plugins import Draw
 from streamlit_folium import st_folium
 from streamlit_autorefresh import st_autorefresh
@@ -82,6 +83,18 @@ def normalize_feature(item):
     if geometry.get("type") not in ("Polygon", "MultiPolygon"):
         return None
     return {"type": "Feature", "properties": feature.get("properties") or {}, "geometry": geometry}
+
+
+def feature_index_at_point(features, lat, lng):
+    """Return the topmost saved polygon that contains a clicked map coordinate."""
+    point = Point(float(lng), float(lat))
+    for index in range(len(features) - 1, -1, -1):
+        try:
+            if shape(features[index]["geometry"]).covers(point):
+                return index
+        except (KeyError, TypeError, ValueError):
+            continue
+    return None
 
 
 def read_uploaded_vector(uploaded_file):
@@ -165,7 +178,20 @@ with st.sidebar:
         save_shared_features([])
         st.rerun()
 
-map_obj = folium.Map(location=[center_lat, center_lon], zoom_start=zoom_level, tiles=None, control_scale=True)
+# Keep the current map view across Streamlit reruns (including after a drawing is saved).
+sidebar_view = (float(center_lat), float(center_lon), int(zoom_level))
+previous_sidebar_view = st.session_state.get("_map_sidebar_view")
+if "map_view_center" not in st.session_state or previous_sidebar_view != sidebar_view:
+    st.session_state.map_view_center = sidebar_view[:2]
+    st.session_state.map_view_zoom = sidebar_view[2]
+st.session_state["_map_sidebar_view"] = sidebar_view
+
+map_obj = folium.Map(
+    location=list(st.session_state.map_view_center),
+    zoom_start=st.session_state.map_view_zoom,
+    tiles=None,
+    control_scale=True,
+)
 local_satellite = st.session_state.get("local_satellite")
 local_vector = st.session_state.get("local_vector")
 if offline_mode and not local_satellite and not local_vector:
@@ -241,14 +267,100 @@ folium.LayerControl().add_to(map_obj)
 
 map_col, list_col = st.columns([4, 1.35], gap="small")
 with map_col:
-    st.caption("Map toolbar မှ polygon/rectangle ကို ရွေးပြီး plot ဆွဲပါ။ Vector map နှင့် Satellite imagery ကို Layer Control မှ ပြောင်းကြည့်နိုင်ပါသည်။")
+    st.caption("Map toolbar မှ polygon/rectangle ဆွဲပါ။ ဆွဲပြီးသားအကွက်ကို တိုက်ရိုက်နှိပ်၍ Plot/Yard number ဖြည့်နိုင်ပါသည်။")
     map_result = st_folium(
         map_obj,
         height=700,
         use_container_width=True,
-        returned_objects=["all_drawings"],
+        returned_objects=["all_drawings", "center", "zoom", "last_object_clicked", "last_object_clicked_count"],
         key="plot_map",
     )
+
+if map_result:
+    current_center = map_result.get("center")
+    if isinstance(current_center, dict) and current_center.get("lat") is not None and current_center.get("lng") is not None:
+        st.session_state.map_view_center = (
+            float(current_center["lat"]),
+            float(current_center["lng"]),
+        )
+    current_zoom = map_result.get("zoom")
+    if current_zoom is not None:
+        st.session_state.map_view_zoom = max(2, min(23, int(round(float(current_zoom)))))
+    click_count = map_result.get("last_object_clicked_count")
+    if click_count is not None:
+        previous_click_count = st.session_state.get("_last_map_click_count", -1)
+        if click_count != previous_click_count:
+            st.session_state["_last_map_click_count"] = click_count
+            clicked = map_result.get("last_object_clicked") or {}
+            clicked_index = None
+            if isinstance(clicked, dict) and clicked.get("lat") is not None and clicked.get("lng") is not None:
+                clicked_index = feature_index_at_point(
+                    st.session_state.features,
+                    clicked["lat"],
+                    clicked["lng"],
+                )
+            st.session_state["_pending_map_edit"] = None
+            if clicked_index is not None:
+                clicked_props = st.session_state.features[clicked_index].get("properties") or {}
+                st.session_state["_pending_map_edit"] = {
+                    "index": clicked_index,
+                    "feature_id": str(clicked_props.get("feature_id", "")),
+                }
+
+def show_feature_edit_dialog(feature_index, feature_id):
+    dialog_key = feature_id or f"legacy-{feature_index}"
+    current_index = feature_index
+    if feature_id:
+        current_index = next(
+            (
+                index
+                for index, feature in enumerate(st.session_state.features)
+                if str((feature.get("properties") or {}).get("feature_id", "")) == feature_id
+            ),
+            -1,
+        )
+    if current_index < 0 or current_index >= len(st.session_state.features):
+        st.warning("ဤအကွက်ကို မတွေ့တော့ပါ။")
+        return
+    current_props = st.session_state.features[current_index].setdefault("properties", {})
+    plot_input_key = f"edit_plot_no_{dialog_key}"
+    yard_input_key = f"edit_yard_no_{dialog_key}"
+    st.session_state[plot_input_key] = str(current_props.get("plot_no", ""))
+    st.session_state[yard_input_key] = str(current_props.get("yard_no", ""))
+
+    @st.dialog("အကွက်အချက်အလက် ပြင်ရန်")
+    def edit_dialog():
+        current_index = feature_index
+        if feature_id:
+            current_index = next(
+                (
+                    index
+                    for index, feature in enumerate(st.session_state.features)
+                    if str((feature.get("properties") or {}).get("feature_id", "")) == feature_id
+                ),
+                -1,
+            )
+        if current_index < 0 or current_index >= len(st.session_state.features):
+            st.warning("ဤအကွက်ကို မတွေ့တော့ပါ။")
+            return
+
+        props = st.session_state.features[current_index].setdefault("properties", {})
+        with st.form(key=f"edit_feature_form_{dialog_key}"):
+            plot_no = st.text_input("Plot number", key=plot_input_key)
+            yard_no = st.text_input("Yard number", key=yard_input_key)
+            submitted = st.form_submit_button("သိမ်းမည်", use_container_width=True)
+        if submitted:
+            props["plot_no"] = plot_no
+            props["yard_no"] = yard_no
+            save_shared_features(st.session_state.features)
+            st.session_state["_attribute_table_revision"] = st.session_state.get("_attribute_table_revision", 0) + 1
+            st.rerun()
+
+    edit_dialog()
+
+pending_map_edit = st.session_state.pop("_pending_map_edit", None)
+if pending_map_edit:
+    show_feature_edit_dialog(pending_map_edit["index"], pending_map_edit["feature_id"])
 
 with list_col:
     st.markdown("#### ဆွဲပြီးသောအကွက်များ")
@@ -264,10 +376,16 @@ with list_col:
                 st.caption(f"ကွက် {index + 1}")
                 st.write(f"**{saved_plot}**")
                 st.caption(f"Yard: {saved_yard}")
-                if st.button("ဖျက်ရန်", key=f"delete_list_{saved_props.get('feature_id', index)}", use_container_width=True):
-                    st.session_state.features.pop(index)
-                    save_shared_features(st.session_state.features)
-                    st.rerun()
+                feature_id = str(saved_props.get("feature_id", ""))
+                edit_col, delete_col = st.columns(2)
+                with edit_col:
+                    if st.button("ပြင်ရန်", key=f"edit_list_{feature_id or index}", use_container_width=True):
+                        show_feature_edit_dialog(index, feature_id)
+                with delete_col:
+                    if st.button("ဖျက်ရန်", key=f"delete_list_{feature_id or index}", use_container_width=True):
+                        st.session_state.features.pop(index)
+                        save_shared_features(st.session_state.features)
+                        st.rerun()
 
 drawings = (map_result or {}).get("all_drawings") or []
 known_geometries = {geometry_key(feature) for feature in st.session_state.features}
@@ -309,7 +427,7 @@ with edit_col:
         use_container_width=True,
         num_rows="fixed",
         disabled=["Feature"],
-        key="plot_attributes_" + "_".join(feature_ids),
+        key="plot_attributes_" + "_".join(feature_ids) + f"_v{st.session_state.get('_attribute_table_revision', 0)}",
         column_config={
             "Feature": st.column_config.NumberColumn("Feature", format="%d"),
             "plot_no": st.column_config.TextColumn("Plot number", help="ဥပမာ P-001"),
